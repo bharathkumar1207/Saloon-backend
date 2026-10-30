@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: saloon-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-saloon}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-saloon}
+      POSTGRES_DB: ${POSTGRES_DB:-saloon}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-saloon}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: saloon-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Overrides whatever DATABASE_URL is in .env (that one's for local
+      # dev, pointing at localhost) — inside this network Postgres is
+      # reachable by its service name instead.
+      DATABASE_URL: postgres://${POSTGRES_USER:-saloon}:${POSTGRES_PASSWORD:-saloon}@postgres:5432/${POSTGRES_DB:-saloon}
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - backend-uploads:/app/uploads
+
+volumes:
+  postgres-data:
+  backend-uploads:
